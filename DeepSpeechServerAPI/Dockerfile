@@ -47,5 +47,5 @@ RUN dotnet build "DeepSpeechServerAPI.csproj" -c Release -o /app/build
 RUN dotnet publish "DeepSpeechServerAPI.csproj" -c Release -o /app/publish
 
 #run app
-WORKDIR /app
+WORKDIR /app/publish
 ENTRYPOINT ["dotnet", "DeepSpeechServerAPI.dll"]
