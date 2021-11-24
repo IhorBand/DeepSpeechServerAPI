@@ -201,6 +201,7 @@ namespace DeepSpeechServerAPI
             try
             {
                 // we can grab only first array of words, because it's always the most confident transcript
+                bool isJsonParamsRead = false;
                 JsonSerializer serializer = new JsonSerializer();
                 JsonModels.WordInfo wordInfo = null;
                 using (FileStream fs = File.Open(outputTempFullFilePath, FileMode.Open))
@@ -208,39 +209,52 @@ namespace DeepSpeechServerAPI
                 using (JsonReader reader = new JsonTextReader(sr))
                 {
                     // Advance the reader to start of array(words array)
-                    while (reader.Path != "transcripts[0].words")
+                    bool isStillReading = true;
+                    while (reader.Path != "transcripts[0].words" && isStillReading)
                     {
-                        reader.Read();
+                        isStillReading = reader.Read();
                     }
 
-                    while (reader.Read())
+                    if (isStillReading)
                     {
-                        // if we done with first array -> break cycle and send text to the client
-                        if (reader.Path == "transcripts[0]" || reader.Path == "transcripts[1]")
+                        while (reader.Read())
                         {
-                            break;
-                        }
-
-                        // deserialize only when there's "{" character in the stream
-                        if (reader.TokenType == JsonToken.StartObject)
-                        {
-                            try
+                            // if we done with first array -> break cycle and send text to the client
+                            if (reader.Path == "transcripts[0]" || reader.Path == "transcripts[1]")
                             {
-                                wordInfo = serializer.Deserialize<JsonModels.WordInfo>(reader);
-                                if (wordInfo != null)
+                                break;
+                            }
+
+                            // deserialize only when there's "{" character in the stream
+                            if (reader.TokenType == JsonToken.StartObject)
+                            {
+                                try
                                 {
-                                    File.AppendAllText(outputFullFilePath, wordInfo.Word + " ");
+                                    wordInfo = serializer.Deserialize<JsonModels.WordInfo>(reader);
+                                    if (wordInfo != null)
+                                    {
+                                        File.AppendAllText(outputFullFilePath, wordInfo.Word + " ");
+                                        isJsonParamsRead = true;
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    //TOOD: log with log4net
+                                    Console.WriteLine($"Error: {ex.Message} \n StackTrace: {ex.StackTrace}");
                                 }
                             }
-                            catch (Exception ex)
-                            {
-                                //TOOD: log with log4net
-                                Console.WriteLine($"Error: {ex.Message} \n StackTrace: {ex.StackTrace}");
-                            }
                         }
                     }
-
                     fs.Close();
+                }
+
+                if(isJsonParamsRead == false)
+                {
+                    Console.WriteLine("Error: JSON wasn't read.");
+                    
+                    // HotFix:
+                    // Please, remove before PROD deploy
+                    outputFullFilePath = outputTempFullFilePath;
                 }
             }
             catch(Exception ex)
