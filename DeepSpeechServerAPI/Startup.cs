@@ -115,7 +115,7 @@ namespace DeepSpeechServerAPI
 
             Console.WriteLine("");
             Console.WriteLine($"{DateTime.UtcNow.Date.Year}-{DateTime.UtcNow.Date.Month}-{DateTime.UtcNow.Day} {DateTime.UtcNow.Hour}:{DateTime.UtcNow.Minute}:{DateTime.UtcNow.Second} || INFO || Receiving Audio File From Client...");
-
+            try
             {
                 var buffer = new byte[1024 * 8];
                 WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
@@ -157,108 +157,133 @@ namespace DeepSpeechServerAPI
                     }
                 }
             }
+            catch(Exception ex)
+            {
+                Console.WriteLine($"{DateTime.UtcNow.Date.Year}-{DateTime.UtcNow.Date.Month}-{DateTime.UtcNow.Day} {DateTime.UtcNow.Hour}:{DateTime.UtcNow.Minute}:{DateTime.UtcNow.Second} || ERROR || ## Message: {ex.Message} \n StackTrace: {ex.StackTrace}");
+            }
 
             Console.WriteLine($"{DateTime.UtcNow.Date.Year}-{DateTime.UtcNow.Date.Month}-{DateTime.UtcNow.Day} {DateTime.UtcNow.Hour}:{DateTime.UtcNow.Minute}:{DateTime.UtcNow.Second} || INFO || Transcribing Audio...");
 
-            string error = string.Empty;
-            string output = string.Empty;
-
-            ProcessStartInfo startInfo = new ProcessStartInfo
+            try
             {
-                FileName = "/bin/bash",
-                Arguments = $"-c \"{args}\"",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
+                string error = string.Empty;
+                string output = string.Empty;
 
-            startInfo.ErrorDialog = false;
+                ProcessStartInfo startInfo = new ProcessStartInfo
+                {
+                    FileName = "/bin/bash",
+                    Arguments = $"-c \"{args}\"",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
 
-            startInfo.RedirectStandardError = true;
-            startInfo.RedirectStandardInput = true;
+                startInfo.ErrorDialog = false;
 
-            var process = System.Diagnostics.Process.Start(startInfo);
+                startInfo.RedirectStandardError = true;
+                startInfo.RedirectStandardInput = true;
 
-            using (System.IO.StreamReader myError = process.StandardError)
+                var process = System.Diagnostics.Process.Start(startInfo);
+
+                using (System.IO.StreamReader myError = process.StandardError)
+                {
+                    error = myError.ReadToEnd();
+                }
+            }
+            catch(Exception ex)
             {
-                error = myError.ReadToEnd();
+                Console.WriteLine($"{DateTime.UtcNow.Date.Year}-{DateTime.UtcNow.Date.Month}-{DateTime.UtcNow.Day} {DateTime.UtcNow.Hour}:{DateTime.UtcNow.Minute}:{DateTime.UtcNow.Second} || ERROR || ## Message: {ex.Message} \n StackTrace: {ex.StackTrace}");
             }
 
             Console.WriteLine($"{DateTime.UtcNow.Date.Year}-{DateTime.UtcNow.Date.Month}-{DateTime.UtcNow.Day} {DateTime.UtcNow.Hour}:{DateTime.UtcNow.Minute}:{DateTime.UtcNow.Second} || INFO || Audio was successfullly Transcribed.");
             Console.WriteLine($"{DateTime.UtcNow.Date.Year}-{DateTime.UtcNow.Date.Month}-{DateTime.UtcNow.Day} {DateTime.UtcNow.Hour}:{DateTime.UtcNow.Minute}:{DateTime.UtcNow.Second} || INFO || Parsing JSON...");
 
-            // we can grab only first array of words, because it's always the most confident transcript
-            JsonSerializer serializer = new JsonSerializer();
-            JsonModels.WordInfo wordInfo = null;
-            using (FileStream fs = File.Open(outputTempFullFilePath, FileMode.Open))
-            using (StreamReader sr = new StreamReader(fs))
-            using (JsonReader reader = new JsonTextReader(sr))
+            try
             {
-                // Advance the reader to start of array(words array)
-                while (reader.Path != "transcripts[0].words")
+                // we can grab only first array of words, because it's always the most confident transcript
+                JsonSerializer serializer = new JsonSerializer();
+                JsonModels.WordInfo wordInfo = null;
+                using (FileStream fs = File.Open(outputTempFullFilePath, FileMode.Open))
+                using (StreamReader sr = new StreamReader(fs))
+                using (JsonReader reader = new JsonTextReader(sr))
                 {
-                    reader.Read();
-                }
-
-                while (reader.Read())
-                {
-                    // if we done with first array -> break cycle and send text to the client
-                    if(reader.Path == "transcripts[0]" || reader.Path == "transcripts[1]")
+                    // Advance the reader to start of array(words array)
+                    while (reader.Path != "transcripts[0].words")
                     {
-                        break;
+                        reader.Read();
                     }
 
-                    // deserialize only when there's "{" character in the stream
-                    if (reader.TokenType == JsonToken.StartObject)
+                    while (reader.Read())
                     {
-                        try
+                        // if we done with first array -> break cycle and send text to the client
+                        if (reader.Path == "transcripts[0]" || reader.Path == "transcripts[1]")
                         {
-                            wordInfo = serializer.Deserialize<JsonModels.WordInfo>(reader);
-                            if (wordInfo != null)
+                            break;
+                        }
+
+                        // deserialize only when there's "{" character in the stream
+                        if (reader.TokenType == JsonToken.StartObject)
+                        {
+                            try
                             {
-                                File.AppendAllText(outputFullFilePath, wordInfo.Word + " ");
+                                wordInfo = serializer.Deserialize<JsonModels.WordInfo>(reader);
+                                if (wordInfo != null)
+                                {
+                                    File.AppendAllText(outputFullFilePath, wordInfo.Word + " ");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                //TOOD: log with log4net
+                                Console.WriteLine($"Error: {ex.Message} \n StackTrace: {ex.StackTrace}");
                             }
                         }
-                        catch(Exception ex)
-                        {
-                            //TOOD: log with log4net
-                            Console.WriteLine($"Error: {ex.Message} \n StackTrace: {ex.StackTrace}");
-                        }
                     }
-                }
 
-                fs.Close();
+                    fs.Close();
+                }
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine($"{DateTime.UtcNow.Date.Year}-{DateTime.UtcNow.Date.Month}-{DateTime.UtcNow.Day} {DateTime.UtcNow.Hour}:{DateTime.UtcNow.Minute}:{DateTime.UtcNow.Second} || ERROR || ## Message: {ex.Message} \n StackTrace: {ex.StackTrace}");
             }
 
             Console.WriteLine($"{DateTime.UtcNow.Date.Year}-{DateTime.UtcNow.Date.Month}-{DateTime.UtcNow.Day} {DateTime.UtcNow.Hour}:{DateTime.UtcNow.Minute}:{DateTime.UtcNow.Second} || INFO || JSON was successfullly Parsed.");
             Console.WriteLine($"{DateTime.UtcNow.Date.Year}-{DateTime.UtcNow.Date.Month}-{DateTime.UtcNow.Day} {DateTime.UtcNow.Hour}:{DateTime.UtcNow.Minute}:{DateTime.UtcNow.Second} || INFO || Sending Result to the Client...");
 
-            FileStream fsSource = new FileStream(
-                outputFullFilePath,
-                FileMode.Open,
-                FileAccess.Read);
-
-            int bytesToRead = 1024 * 8;
-            byte[] data = new byte[bytesToRead];
-            while (true)
+            try
             {
-                int count = fsSource.Read(data, 0, data.Length);
-                if (count <= 0)
+                FileStream fsSource = new FileStream(
+                    outputFullFilePath,
+                    FileMode.Open,
+                    FileAccess.Read);
+
+                int bytesToRead = 1024 * 8;
+                byte[] data = new byte[bytesToRead];
+                while (true)
                 {
-                    break;
+                    int count = fsSource.Read(data, 0, data.Length);
+                    if (count <= 0)
+                    {
+                        break;
+                    }
+
+                    await webSocket.SendAsync(new ArraySegment<byte>(data, 0, count), WebSocketMessageType.Binary, true, CancellationToken.None);
+
+                    var resultBuffer = new byte[bytesToRead];
+                    var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(resultBuffer), CancellationToken.None);
+                    //TODO: need to check for "OK" result
                 }
 
-                await webSocket.SendAsync(new ArraySegment<byte>(data, 0, count), WebSocketMessageType.Binary, true, CancellationToken.None);
+                fsSource.Close();
 
-                var resultBuffer = new byte[bytesToRead];
-                var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(resultBuffer), CancellationToken.None);
-                //TODO: need to check for "OK" result
+                var response = new ArraySegment<byte>(Encoding.UTF8.GetBytes("{\"eof\" : 1}"));
+                await webSocket.SendAsync(response, WebSocketMessageType.Text, true, CancellationToken.None);
             }
-
-            fsSource.Close();
-
-            var response = new ArraySegment<byte>(Encoding.UTF8.GetBytes("{\"eof\" : 1}"));
-            await webSocket.SendAsync(response, WebSocketMessageType.Text, true, CancellationToken.None);
+            catch(Exception ex)
+            {
+                Console.WriteLine($"{DateTime.UtcNow.Date.Year}-{DateTime.UtcNow.Date.Month}-{DateTime.UtcNow.Day} {DateTime.UtcNow.Hour}:{DateTime.UtcNow.Minute}:{DateTime.UtcNow.Second} || ERROR || ## Message: {ex.Message} \n StackTrace: {ex.StackTrace}");
+            }
 
             Console.WriteLine($"{DateTime.UtcNow.Date.Year}-{DateTime.UtcNow.Date.Month}-{DateTime.UtcNow.Day} {DateTime.UtcNow.Hour}:{DateTime.UtcNow.Minute}:{DateTime.UtcNow.Second} || INFO || Result was successfully sent to the client.");
             Console.WriteLine($"{DateTime.UtcNow.Date.Year}-{DateTime.UtcNow.Date.Month}-{DateTime.UtcNow.Day} {DateTime.UtcNow.Hour}:{DateTime.UtcNow.Minute}:{DateTime.UtcNow.Second} || INFO || Closing connection with client.");
