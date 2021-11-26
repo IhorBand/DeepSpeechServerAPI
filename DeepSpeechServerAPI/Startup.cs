@@ -59,7 +59,8 @@ namespace DeepSpeechServerAPI
 
             var webSocketOptions = new WebSocketOptions()
             {
-                KeepAliveInterval = TimeSpan.FromSeconds(120)
+                //KeepAliveInterval = TimeSpan.FromSeconds(120)
+                KeepAliveInterval = TimeSpan.Zero 
             };
 
             app.UseWebSockets(webSocketOptions);
@@ -117,7 +118,8 @@ namespace DeepSpeechServerAPI
             Console.WriteLine($"{DateTime.UtcNow.Date.Year}-{DateTime.UtcNow.Date.Month}-{DateTime.UtcNow.Day} {DateTime.UtcNow.Hour}:{DateTime.UtcNow.Minute}:{DateTime.UtcNow.Second} || INFO || Receiving Audio File From Client...");
             try
             {
-                var buffer = new byte[1024 * 8];
+                //var buffer = new byte[1024 * 8];
+                var buffer = new byte[1024*512];
                 WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
                 while (!result.CloseStatus.HasValue)
                 {
